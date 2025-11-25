@@ -1,0 +1,72 @@
+{
+  "name": "chordium-support",
+  "displayName": "chordium-support",
+  "description": " You can configure and automatically trigger specific Chordium commands (such as lenscloud attach reference) based on defined VS Code events like file save or file change and restrict execution to certain folders.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.106.1"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [  "workspaceContains:**/*", "onStartupFinished"],
+  "main": "./out/extension.js",
+"contributes": {
+  "configuration": {
+    "title": "Chordium Automation Settings",
+    "properties": {
+      "chordiumSupport.command": {
+        "type": "string",
+        "default": "lenscloud attach reference",
+        "description": "Default Lenscloud command to run."
+      },
+      "chordium-auto.rules": {
+        "type": "array",
+        "description": "Automation rules for Lenscloud commands.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable or disable this rule"
+            },
+            "command": {
+              "type": "string",
+              "description": "Command to execute"
+            },
+            "events": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Events: onSave, onCreate, onDelete"
+            },
+            "watchFolders": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Folders to watch"
+            }
+          } 
+        }
+      }
+    }
+  }
+} ,
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.106.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.46.3",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
