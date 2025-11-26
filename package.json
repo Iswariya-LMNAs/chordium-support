@@ -44,7 +44,11 @@
               },
               "trigger": {
                 "type": "string",
-                "enum": ["onSave", "onChange", "cron"],
+                "enum": [
+                  "onSave",
+                  "onChange",
+                  "cron"
+                ],
                 "description": "Event trigger for the command."
               },
               "cron": {
@@ -70,7 +74,13 @@
                 "items": {
                   "type": "string"
                 },
-                "default": ["main", "release", "hot-fix", "develop", "pre-prod"]
+                "default": [
+                  "main",
+                  "release",
+                  "hot-fix",
+                  "develop",
+                  "pre-prod"
+                ]
               }
             }
           },
@@ -115,11 +125,13 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
+    "@types/sinon": "^21.0.0",
     "@types/vscode": "^1.91.0",
     "@types/which": "^3.0.4",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.1",
+    "sinon": "^21.0.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.3"
   }

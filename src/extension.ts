@@ -7,7 +7,7 @@ import { spawn, spawnSync } from "child_process";
 // ======================================================
 // 1️⃣ Node Runtime Manager
 // ======================================================
-class NodeRuntime {
+export class NodeRuntime {
   constructor(private context: vscode.ExtensionContext) {}
 
   getNodeBinary(version: string): string | null {
@@ -32,7 +32,7 @@ class NodeRuntime {
 // ======================================================
 // 2️⃣ LensCloud Resolver
 // ======================================================
-class LensCloudResolver {
+export class LensCloudResolver {
   constructor(private nodeBinary: string) {}
 
   detect(): string | null {
@@ -94,7 +94,7 @@ class LensCloudResolver {
 // ======================================================
 // 3️⃣ Output Manager
 // ======================================================
-class OutputManager {
+export class OutputManager {
   private channel = vscode.window.createOutputChannel("Chordium Support");
 
   constructor() {
@@ -117,7 +117,7 @@ class OutputManager {
 // ======================================================
 // 4️⃣ LensCloud Executor (Reusable)
 // ======================================================
-class LensCloudExecutor {
+export class LensCloudExecutor {
   constructor(private lenscloud: string, private output: OutputManager) {}
 
   run(args: string[]): void {
@@ -164,7 +164,7 @@ class LensCloudExecutor {
 // ======================================================
 // 5️⃣ Command Runner (Handles Settings)
 // ======================================================
-class CommandRunner {
+export class CommandRunner {
   constructor(
     private executor: LensCloudExecutor,
     private output: OutputManager
