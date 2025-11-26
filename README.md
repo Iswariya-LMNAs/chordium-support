@@ -1,71 +1,39 @@
-# chordium-support README
+# Chordium Support
 
-This is the README for your extension "chordium-support". After writing up a brief description, we recommend including the following sections.
+This VS Code extension provides automation and helper commands for the `lenscloud` CLI and Chordium workflows.  
+It detects and uses a bundled Node 20 runtime internally, supports interactive CLI prompts, and triggers automated tasks based on file changes or saves.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- Uses bundled Node.js v20 runtime.
+- Detects and runs `lenscloud` CLI reliably across all platforms.
+- Shows clean formatted logs in an Output Channel.
+- Supports prompt handling for interactive questions from the CLI.
+- Auto-executes commands based on workspace configuration.
+- Branch selection UI for reference table updates.
 
-For example if there is an image subfolder under your extension project workspace:
+## Commands
 
-\!\[feature X\]\(images/feature-x.png\)
+The extension reads custom commands from: chordiumSupport.commands
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+Each command supports:
+- `command`: the lenscloud command to run
+- `trigger`: `"onSave"` or `"onChange"`
+- `folders`: List of folders the rule applies to
+- `branches`: Array of branch names for popup selection
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Workspace must contain a valid git repo.
+- `lenscloud` must be installed globally or available in PATH (extension finder covers both).
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+This extension contributes the following setting:
 
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- `chordiumSupport.commands`: Array of workflow automation commands.
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+### 0.0.1
+Initial release with Node20 runtime integration and lenscloud automation.
