@@ -1,209 +1,264 @@
 import * as vscode from "vscode";
-import { spawnSync, spawn } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
+import { spawn, spawnSync } from "child_process";
 
-export function activate(context: vscode.ExtensionContext) {
-  // -------------------------------------------------------------------
-  // 1️⃣ Detect Node 20 Runtime bundled with extension
-  // -------------------------------------------------------------------
-  const platform = process.platform;
+// ======================================================
+// 1️⃣ Node Runtime Manager
+// ======================================================
+class NodeRuntime {
+  constructor(private context: vscode.ExtensionContext) {}
 
-  let NODE20 = "";
-  if (platform === "win32") {
-    NODE20 = context.asAbsolutePath("node-runtime/node.exe");
-  } else if (platform === "darwin") {
-    NODE20 = context.asAbsolutePath("node-runtime/node-macos");
-  } else {
-    NODE20 = context.asAbsolutePath("node-runtime/node");
+  getNodeBinary(version: string): string | null {
+    const platform = process.platform;
+
+    const file =
+      platform === "win32"
+        ? "node.exe"
+        : platform === "darwin"
+        ? "node-macos"
+        : "node";
+
+    const localPath = this.context.asAbsolutePath(
+      `node-runtime/${file}`
+    );
+
+    if (fs.existsSync(localPath)) return localPath;
+
+    vscode.window.showErrorMessage(`Node runtime not found: ${localPath}`);
+    return null;
   }
+}
 
-  if (!fs.existsSync(NODE20)) {
-    vscode.window.showErrorMessage(`❌ Node20 binary missing: ${NODE20}`);
-    return;
-  }
+// ======================================================
+// 2️⃣ LensCloud Resolver
+// ======================================================
+class LensCloudResolver {
+  constructor(private nodeBinary: string) {}
 
-  // -------------------------------------------------------------------
-  // 2️⃣ Detect lenscloud CLI (cross-platform + dynamic Node20 fallback)
-  // -------------------------------------------------------------------
-  function getLenscloudFallback(): string | null {
-    const home = os.homedir();
-    let nvmDir = "";
+  detect(): string | null {
+    try {
+      const result = spawnSync(
+        this.nodeBinary,
+        ["-e", "console.log(require('which').sync('lenscloud'))"],
+        { encoding: "utf-8", env: { ...process.env } }
+      );
 
-    if (platform === "win32") {
-      nvmDir = path.join(home, "AppData", "Roaming", "nvm");
-    } else {
-      nvmDir = path.join(home, ".nvm/versions/node");
+      const out = result.stdout?.trim();
+      if (result.status === 0 && out) return out;
+      throw new Error("Not found");
+    } catch {
+      const fallback = this.getFallback();
+      if (fallback) {
+        vscode.window.showWarningMessage(`Using fallback lenscloud: ${fallback}`);
+        return fallback;
+      }
+      vscode.window.showErrorMessage("❌ lenscloud CLI not found.");
+      return null;
     }
+  }
+
+  private getFallback(): string | null {
+    const home = os.homedir();
+    const platform = process.platform;
+    const nvmDir =
+      platform === "win32"
+        ? path.join(home, "AppData", "Roaming", "nvm")
+        : path.join(home, ".nvm/versions/node");
 
     if (!fs.existsSync(nvmDir)) return null;
 
-    // Find first folder matching v20.*
-    const versions = fs.readdirSync(nvmDir).filter((v) => /^v20\./.test(v));
+    const versions = fs
+      .readdirSync(nvmDir)
+      .filter((v) => /^v20\./.test(v)); // dynamic v20.x
 
     for (const v of versions) {
-      const lenscloudPath =
+      const cli =
         platform === "win32"
           ? path.join(nvmDir, v, "lenscloud.exe")
           : path.join(nvmDir, v, "bin", "lenscloud");
 
-      if (fs.existsSync(lenscloudPath)) return lenscloudPath;
+      if (fs.existsSync(cli)) return cli;
     }
 
-    return null; // no Node 20 found with lenscloud
+    return null;
+  }
+}
+
+// ======================================================
+// 3️⃣ Output Manager
+// ======================================================
+class OutputManager {
+  private channel = vscode.window.createOutputChannel("Chordium Support");
+
+  constructor() {
+    this.channel.show(true);
   }
 
-  function detectLensCloud(): string | null {
-    try {
-      const result = spawnSync(
-        NODE20,
-        ["-e", "console.log(require('which').sync('lenscloud'))"],
-        {
-          encoding: "utf-8",
-          env: { ...process.env },
-        }
-      );
-
-      if (result.status === 0 && result.stdout.trim()) {
-        const resolved = result.stdout.trim();
-        console.log("Detected lenscloud at:", resolved);
-        return resolved;
-      } else {
-        throw new Error(result.stderr || "Not found");
-      }
-    } catch {
-      const fallback = getLenscloudFallback();
-      if (fallback) {
-        vscode.window.showWarningMessage(`lenscloud not found in PATH. Using fallback: ${fallback}`);
-        return fallback;
-      } else {
-        vscode.window.showErrorMessage("lenscloud CLI not found. Install it globally.");
-        return null;
-      }
-    }
+  write(text: string) {
+    this.channel.append(this.cleanAnsi(text));
   }
 
-  const LENS_CLOUD = detectLensCloud();
-  if (!LENS_CLOUD) return;
+  writeln(text: string) {
+    this.channel.appendLine(this.cleanAnsi(text));
+  }
 
-  // -------------------------------------------------------------------
-  // 3️⃣ Output channel
-  // -------------------------------------------------------------------
-  const output = vscode.window.createOutputChannel("Chordium Support");
-  output.show(true);
-
-  function cleanAnsi(input: string) {
+  private cleanAnsi(input: string) {
     return input.replace(/\u001b\[.*?[@-~]/g, "");
   }
+}
 
-  // -------------------------------------------------------------------
-  // 4️⃣ Execute lenscloud
-  // -------------------------------------------------------------------
-  function execLensCloud(args: string) {
-    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!workspacePath) {
+// ======================================================
+// 4️⃣ LensCloud Executor (Reusable)
+// ======================================================
+class LensCloudExecutor {
+  constructor(private lenscloud: string, private output: OutputManager) {}
+
+  run(args: string[]): void {
+    const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (!workspace) {
       vscode.window.showErrorMessage("❌ No workspace folder.");
       return;
     }
 
-    const proc = spawn(LENS_CLOUD!, args.split(" "), {
-      cwd: workspacePath,
+    const proc = spawn(this.lenscloud, args, {
+      cwd: workspace,
       env: {
         ...process.env,
-        PATH: `${path.dirname(LENS_CLOUD!)}:${process.env.PATH}`,
+        PATH: `${path.dirname(this.lenscloud)}:${process.env.PATH}`,
       },
       shell: false,
     });
 
     proc.stdout.on("data", async (data) => {
-      const text = cleanAnsi(data.toString());
-      output.append(text);
+      const text = data.toString();
+      this.output.write(text);
 
+      // Auto prompt handler for attach reference
       if (text.includes("Do you want to update the Task Reference Table?")) {
-        const answer = await vscode.window.showInformationMessage(
-          "Update the Task Reference Table?",
+        const choice = await vscode.window.showInformationMessage(
+          "Update Task Reference Table?",
           "Yes",
           "No"
         );
-        proc.stdin.write(answer === "Yes" ? "Y\n" : "n\n");
+        proc.stdin.write(choice === "Yes" ? "Y\n" : "n\n");
       }
     });
 
     proc.stderr.on("data", (data) => {
-      output.append(`🟥 ${cleanAnsi(data.toString())}`);
+      this.output.writeln("🟥 " + data.toString());
     });
 
     proc.on("close", (code) => {
-      output.appendLine(`\n✔ Finished with exit code ${code}`);
-    });
-
-    proc.on("error", (err) => {
-      vscode.window.showErrorMessage(`❌ Error running lenscloud: ${err.message}`);
+      this.output.writeln(`✔ lenscloud finished with exit code ${code}`);
     });
   }
+}
 
-  // -------------------------------------------------------------------
-  // 5️⃣ Branch selection & triggers
-  // -------------------------------------------------------------------
-  const config = vscode.workspace.getConfiguration("chordiumSupport");
-  const settings = config.get<any[]>("commands") || [];
+// ======================================================
+// 5️⃣ Command Runner (Handles Settings)
+// ======================================================
+class CommandRunner {
+  constructor(
+    private executor: LensCloudExecutor,
+    private output: OutputManager
+  ) {}
 
-  function isInScope(doc: vscode.TextDocument, folders: string[]) {
-    if (!folders.length) return true;
-    return folders.some((f) => doc.uri.fsPath.includes(f));
+  async runSetting(setting: any, doc?: vscode.TextDocument) {
+    if (!setting.enabled) return;
+
+    if (setting.folders?.length && doc) {
+      const isMatch = setting.folders.some((f: string) =>
+        doc.uri.fsPath.includes(f)
+      );
+      if (!isMatch) return;
+    }
+
+    if (setting.needBaseBranch) {
+      await this.runWithBranch(setting);
+    } else {
+      this.executor.run(setting.command.split(" "));
+    }
   }
 
-  async function handleReferenceFlow(branches: string[], baseCmd: string) {
+  private async runWithBranch(setting: any) {
+    const branches = setting.branches || [];
     const defaultBranch = branches[0] ?? "main";
-    const selection = await vscode.window.showInformationMessage(
-      `Attach reference from ${defaultBranch}?`,
-      {
-        modal: false,
-        detail: `Choose how you want to pick the branch`,
-      },
-      { title: `Use ${defaultBranch}`, value: "default" },
-      { title: "Select another branch", value: "select" }
+
+    const action = await vscode.window.showInformationMessage(
+      `Run "${setting.command}" with branch ${defaultBranch}?`,
+      { title: `Use ${defaultBranch}`, value: "def" },
+      { title: "Select branch", value: "sel" }
     );
 
-    if (!selection) return;
+    if (!action) return;
 
-    let selectedBranch = defaultBranch;
+    let branch = defaultBranch;
 
-    if (selection.value === "select") {
-      selectedBranch =
+    if (action.value === "sel") {
+      branch =
         (await vscode.window.showQuickPick(branches, {
-          placeHolder: "Select branch",
-        })) ?? defaultBranch;
+          placeHolder: "Select base branch",
+        })) || defaultBranch;
     }
 
     const confirm = await vscode.window.showInformationMessage(
-      `Attach reference from ${selectedBranch}?`,
+      `Execute "${setting.command}" on ${branch}?`,
       "Confirm",
       "Cancel"
     );
+
     if (confirm !== "Confirm") return;
 
-    execLensCloud(`${baseCmd} -b ${selectedBranch}`);
+    const args = [...setting.command.split(" "), "-b", branch];
+    this.executor.run(args);
   }
-
-  settings.forEach((setting) => {
-    const { command, trigger, folders = [], branches = [] } = setting;
-
-    if (trigger === "onSave") {
-      vscode.workspace.onDidSaveTextDocument((doc) => {
-        if (!isInScope(doc, folders)) return;
-        handleReferenceFlow(branches, command);
-      });
-    }
-
-    if (trigger === "onChange") {
-      vscode.workspace.onDidChangeTextDocument((event) => {
-        if (!isInScope(event.document, folders)) return;
-        handleReferenceFlow(branches, command);
-      });
-    }
-  });
 }
 
+// ======================================================
+// 6️⃣ Main Activate Function
+// ======================================================
+export function activate(context: vscode.ExtensionContext) {
+  const config = vscode.workspace.getConfiguration("chordiumSupport");
+  const nodeVersion = config.get<string>("nodeVersion") || "v20";
+  const settings = config.get<any[]>("commands") || [];
+
+  // Load Node binary
+  const nodeRuntime = new NodeRuntime(context);
+  const node20 = nodeRuntime.getNodeBinary(nodeVersion);
+  if (!node20) return;
+
+  // Detect lenscloud
+  const resolver = new LensCloudResolver(node20);
+  const lenscloud = resolver.detect();
+  if (!lenscloud) return;
+
+  const output = new OutputManager();
+  const executor = new LensCloudExecutor(lenscloud, output);
+  const runner = new CommandRunner(executor, output);
+
+  // Register event triggers
+  for (const setting of settings) {
+    if (!setting.enabled) continue;
+
+    // --- onSave ---
+    if (setting.trigger === "onSave") {
+      vscode.workspace.onDidSaveTextDocument((doc) =>
+        runner.runSetting(setting, doc)
+      );
+    }
+
+    // --- onChange ---
+    if (setting.trigger === "onChange") {
+      vscode.workspace.onDidChangeTextDocument((ev) =>
+        runner.runSetting(setting, ev.document)
+      );
+    }
+
+    // --- cron (future enhancement) ---
+  }
+}
+
+// ======================================================
 export function deactivate() {}

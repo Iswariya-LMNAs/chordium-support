@@ -1,7 +1,7 @@
 {
   "name": "chordium-support",
   "displayName": "chordium-support",
-  "description": " You can configure and automatically trigger specific Chordium commands (such as lenscloud attach reference) based on defined VS Code events like file save or file change and restrict execution to certain folders.",
+  "description": "You can configure and automatically trigger LensCloud (Chordium) commands based on VS Code events like file save or change.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.91.0"
@@ -22,63 +22,81 @@
     "configuration": {
       "title": "Chordium / LensCloud Support Settings",
       "properties": {
+        "chordiumSupport.nodeVersion": {
+          "type": "string",
+          "default": "v20",
+          "description": "Node version used to resolve the correct lenscloud binary. Default is v20."
+        },
         "chordiumSupport.commands": {
           "type": "array",
-          "description": "List of Chordium/LensCloud commands with triggers and folder scope.",
+          "description": "Automated LensCloud commands with triggers, folders, and branch rules.",
           "items": {
             "type": "object",
             "properties": {
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "Enable or disable this command."
+              },
               "command": {
                 "type": "string",
-                "description": "LensCloud CLI command to run, example: lenscloud attach reference"
+                "description": "LensCloud CLI command, example: attach reference"
               },
               "trigger": {
                 "type": "string",
-                "enum": [
-                  "onSave",
-                  "onChange",
-                  "cron"
-                ],
-                "description": "Event trigger for the command"
+                "enum": ["onSave", "onChange", "cron"],
+                "description": "Event trigger for the command."
               },
               "cron": {
                 "type": "string",
-                "description": "Cron expression if trigger = cron",
-                "default": ""
+                "default": "",
+                "description": "Cron expression (only required when trigger = cron)."
               },
               "folders": {
                 "type": "array",
-                "description": "List of folders to watch",
+                "description": "List of workspace folders that trigger this command.",
                 "items": {
                   "type": "string"
                 }
               },
+              "needBaseBranch": {
+                "type": "boolean",
+                "default": false,
+                "description": "If enabled, a base branch must be selected before running the command."
+              },
               "branches": {
                 "type": "array",
-                "description": "Selectable branch names for popup dropdown",
+                "description": "List of selectable base branches (only used when needBaseBranch = true).",
                 "items": {
                   "type": "string"
                 },
-                "default": [
-                  "main",
-                  "release",
-                  "hotfix"
-                ]
+                "default": ["main", "release", "hot-fix", "develop", "pre-prod"]
               }
             }
           },
           "default": [
             {
+              "enabled": true,
               "command": "attach reference",
               "trigger": "onSave",
               "folders": [
                 "clientScript",
-                "serverScript"
+                "serverScript",
+                "report",
+                "customFields",
+                "customDoctype",
+                "document",
+                "propertySetter",
+                "letterHead",
+                "printFormat"
               ],
+              "needBaseBranch": true,
               "branches": [
                 "main",
                 "release",
-                "hot-fix"
+                "hot-fix",
+                "develop",
+                "pre-prod"
               ]
             }
           ]
