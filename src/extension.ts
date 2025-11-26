@@ -20,9 +20,7 @@ class NodeRuntime {
         ? "node-macos"
         : "node";
 
-    const localPath = this.context.asAbsolutePath(
-      `node-runtime/${file}`
-    );
+    const localPath = this.context.asAbsolutePath(`node-runtime/${file}`);
 
     if (fs.existsSync(localPath)) return localPath;
 
@@ -47,6 +45,7 @@ class LensCloudResolver {
 
       const out = result.stdout?.trim();
       if (result.status === 0 && out) return out;
+
       throw new Error("Not found");
     } catch {
       const fallback = this.getFallback();
@@ -54,12 +53,18 @@ class LensCloudResolver {
         vscode.window.showWarningMessage(`Using fallback lenscloud: ${fallback}`);
         return fallback;
       }
-      vscode.window.showErrorMessage("❌ lenscloud CLI not found.");
+      vscode.window.showErrorMessage("lenscloud CLI not found.");
       return null;
     }
   }
 
+  // --------------------------------------------
+  // FIXED: nodeVersion is now read from settings
+  // --------------------------------------------
   private getFallback(): string | null {
+    const config = vscode.workspace.getConfiguration("chordiumSupport");
+    const nodeVersion = config.get<string>("nodeVersion") || "v20";
+
     const home = os.homedir();
     const platform = process.platform;
     const nvmDir =
@@ -71,7 +76,7 @@ class LensCloudResolver {
 
     const versions = fs
       .readdirSync(nvmDir)
-      .filter((v) => /^v20\./.test(v)); // dynamic v20.x
+      .filter((folder) => folder.startsWith(nodeVersion));
 
     for (const v of versions) {
       const cli =
@@ -118,7 +123,7 @@ class LensCloudExecutor {
   run(args: string[]): void {
     const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (!workspace) {
-      vscode.window.showErrorMessage("❌ No workspace folder.");
+      vscode.window.showErrorMessage("No workspace folder.");
       return;
     }
 
