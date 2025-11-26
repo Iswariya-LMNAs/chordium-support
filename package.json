@@ -4,53 +4,84 @@
   "description": " You can configure and automatically trigger specific Chordium commands (such as lenscloud attach reference) based on defined VS Code events like file save or file change and restrict execution to certain folders.",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.106.1"
+    "vscode": "^1.91.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [  "workspaceContains:**/*", "onStartupFinished"],
+  "activationEvents": [
+    "workspaceContains:**/*",
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
-"contributes": {
-  "configuration": {
-    "title": "Chordium Automation Settings",
-    "properties": {
-      "chordiumSupport.command": {
-        "type": "string",
-        "default": "lenscloud attach reference",
-        "description": "Default Lenscloud command to run."
-      },
-      "chordium-auto.rules": {
-        "type": "array",
-        "description": "Automation rules for Lenscloud commands.",
-        "items": {
-          "type": "object",
-          "properties": {
-            "enabled": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable or disable this rule"
-            },
-            "command": {
-              "type": "string",
-              "description": "Command to execute"
-            },
-            "events": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Events: onSave, onCreate, onDelete"
-            },
-            "watchFolders": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Folders to watch"
+  "contributes": {
+    "configuration": {
+      "title": "Chordium / LensCloud Support Settings",
+      "properties": {
+        "chordiumSupport.commands": {
+          "type": "array",
+          "description": "List of Chordium/LensCloud commands with triggers and folder scope.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "LensCloud CLI command to run, example: lenscloud attach reference"
+              },
+              "trigger": {
+                "type": "string",
+                "enum": [
+                  "onSave",
+                  "onChange",
+                  "cron"
+                ],
+                "description": "Event trigger for the command"
+              },
+              "cron": {
+                "type": "string",
+                "description": "Cron expression if trigger = cron",
+                "default": ""
+              },
+              "folders": {
+                "type": "array",
+                "description": "List of folders to watch",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "branches": {
+                "type": "array",
+                "description": "Selectable branch names for popup dropdown",
+                "items": {
+                  "type": "string"
+                },
+                "default": [
+                  "main",
+                  "release",
+                  "hotfix"
+                ]
+              }
             }
-          } 
+          },
+          "default": [
+            {
+              "command": "attach reference",
+              "trigger": "onSave",
+              "folders": [
+                "clientScript",
+                "serverScript"
+              ],
+              "branches": [
+                "main",
+                "release",
+                "hot-fix"
+              ]
+            }
+          ]
         }
       }
     }
-  }
-} ,
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
@@ -60,13 +91,14 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.106.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.46.3",
+    "@types/vscode": "^1.106.1",
+    "@types/which": "^3.0.4",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.1",
     "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "typescript-eslint": "^8.46.3"
   }
 }

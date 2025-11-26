@@ -128,247 +128,360 @@
 // export function deactivate() {}
 
 
+// import * as vscode from "vscode";
+// import * as cp from "child_process";
+// import * as path from "path";
+// import which from "which";
+
+// export function activate(context: vscode.ExtensionContext) {
+
+//   // -------------------------------------------------------------------
+//   // 1️⃣ Detect Node 20 inside the extension
+//   // -------------------------------------------------------------------
+
+//   const platform = process.platform;
+
+//   let NODE20 = "";
+//   if (platform === "win32") {
+//     NODE20 = context.asAbsolutePath("node-runtime/node.exe");
+//   } else if (platform === "darwin") {
+//     NODE20 = context.asAbsolutePath("node-runtime/node-macos");
+//   } else {
+//     NODE20 = context.asAbsolutePath("node-runtime/node");
+//   }
+
+//   // Ensure binary exists
+//   vscode.workspace.fs.stat(vscode.Uri.file(NODE20)).then(
+//     () => {},
+//     () => vscode.window.showErrorMessage(`Node 20 binary missing: ${NODE20}`)
+//   );
+
+
+//   // -------------------------------------------------------------------
+//   // 2️⃣ Auto-detect lenscloud CLI
+//   // -------------------------------------------------------------------
+
+//   const FALLBACK_PATH =
+//     "/home/tyro23007/.nvm/versions/node/v20.19.5/bin/lenscloud";
+
+//   function detectLensCloud(): string | null {
+//     try {
+//       const resolved = which.sync("lenscloud");
+//       console.log("Detected lenscloud at:", resolved);
+//       return resolved;
+//     } catch (err) {
+//       // fallback check
+//       try {
+//         vscode.workspace.fs.stat(vscode.Uri.file(FALLBACK_PATH));
+//         vscode.window.showWarningMessage(
+//           `⚠️ lenscloud CLI not found in PATH. Using fallback binary: ${FALLBACK_PATH}`
+//         );
+//         return FALLBACK_PATH;
+//       } catch {
+//         vscode.window.showErrorMessage(
+//           "❌ lenscloud CLI not found. Install with `npm i -g lenscloud` OR ensure fallback path exists."
+//         );
+//         return null;
+//       }
+//     }
+//   }
+
+//   const LENS_CLOUD = detectLensCloud();
+//   if (!LENS_CLOUD) return;
+
+
+//   // -------------------------------------------------------------------
+//   // Output channel
+//   // -------------------------------------------------------------------
+
+//   const output = vscode.window.createOutputChannel("Chordium Support");
+
+
+//   // -------------------------------------------------------------------
+//   // 3️⃣ Function to run lenscloud using our Node 20 runtime
+//   // -------------------------------------------------------------------
+
+//   function execLensCloud(args: string) {
+//     const fullCmd = `"${NODE20}" "${LENS_CLOUD}" ${args}`;
+
+//     output.appendLine(`\n⚙️ Running: ${fullCmd}\n`);
+
+//     cp.exec(fullCmd, (err, stdout, stderr) => {
+//       if (err) {
+//         vscode.window.showErrorMessage(`❌ LensCloud failed: ${err.message}`);
+//         output.appendLine(err.message);
+//         return;
+//       }
+//       if (stdout.trim()) output.appendLine(stdout);
+//       if (stderr.trim()) output.appendLine(stderr);
+//     });
+//   }
+
+
+//   // -------------------------------------------------------------------
+//   // 4️⃣ Read user configuration
+//   // -------------------------------------------------------------------
+
+//   const config = vscode.workspace.getConfiguration("chordiumSupport");
+//   const settings = config.get<any[]>("commands") || [];
+
+
+//   // -------------------------------------------------------------------
+//   // 5️⃣ Branch selection popup
+//   // -------------------------------------------------------------------
+
+//   async function handleReferenceFlow(branches: string[], baseCmd: string) {
+//     const defaultBranch = branches[0] ?? "main";
+
+//     const action = await vscode.window.showInformationMessage(
+//       `Do you want reference from ${defaultBranch}?`,
+//       defaultBranch,
+//       "Yes",
+//       "No"
+//     );
+
+//     if (!action || action === "No") {
+//       vscode.window.showWarningMessage("Skipped.");
+//       return;
+//     }
+
+//     let selectedBranch = defaultBranch;
+
+//     if (action === defaultBranch) {
+//       selectedBranch =
+//         (await vscode.window.showQuickPick(branches, {
+//           placeHolder: "Select branch",
+//         })) ?? defaultBranch;
+//     }
+
+//     const finalConfirm = await vscode.window.showInformationMessage(
+//       `Attach reference from ${selectedBranch}?`,
+//       "Confirm",
+//       "Cancel"
+//     );
+
+//     if (finalConfirm !== "Confirm") return;
+
+//     execLensCloud(`${baseCmd} -b ${selectedBranch}`);
+//     vscode.window.showInformationMessage(
+//       `Reference attached from ${selectedBranch}`
+//     );
+//   }
+
+
+//   // -------------------------------------------------------------------
+//   // 6️⃣ Register triggers based on settings
+//   // -------------------------------------------------------------------
+
+//   function isInScope(doc: vscode.TextDocument, folders: string[]) {
+//     if (!folders || folders.length === 0) return true;
+//     return folders.some((f) => doc.uri.fsPath.includes(f));
+//   }
+
+//   settings.forEach((setting) => {
+//     const { command, trigger, folders = [], branches = [] } = setting;
+
+//     if (trigger === "onSave") {
+//       vscode.workspace.onDidSaveTextDocument((doc) => {
+//         if (!isInScope(doc, folders)) return;
+//         handleReferenceFlow(branches, command);
+//       });
+//     }
+
+//     if (trigger === "onChange") {
+//       vscode.workspace.onDidChangeTextDocument((event) => {
+//         if (!isInScope(event.document, folders)) return;
+//         handleReferenceFlow(branches, command);
+//       });
+//     }
+//   });
+// }
+
+// export function deactivate() {}
+
+
 import * as vscode from "vscode";
-import { spawn, ChildProcess } from "child_process";
+import * as cp from "child_process";
 import * as path from "path";
-
-const BRANCHES = ["main", "develop", "release", "hot-fix", "pre-prod"];
-
-// <<<< NEW: we will NOT call lenscloud as a system-installed binary
-// we will execute it using Node v20 + local CLI script
-const LENS_CLOUD_ENTRY = "lenscloud-cli/index.js";
-
-const ANALYSE_ARGS = ["analyse", "change-object", "-b"]; 
-const ATTACH_ARGS = ["attach", "reference", "-b"];
-
-// debounce map
-const debounceTimers = new Map<string, NodeJS.Timeout>();
-const LENS_CLOUD_PATH = "/home/tyro23004/.nvm/versions/node/v20.13.1/bin/lenscloud";
-const NODE20_PATH = "/home/tyro23004/.nvm/versions/node/v20.13.1/bin/node";
-
+import which from "which";
 
 export function activate(context: vscode.ExtensionContext) {
 
-  // <<<< NEW — dedicated Output Channel
-  const output = vscode.window.createOutputChannel("LensCloud Automation");
-  output.show(true);  
-  output.appendLine("LensCloud Automation Started");
+  // -------------------------------------------------------------------
+  // 1️⃣ Detect Node 20 inside the extension
+  // -------------------------------------------------------------------
 
-  // <<<< NEW — get Node v20 inside the extension
-  const node20Path = vscode.Uri.joinPath(
-    context.extensionUri,
-    "node-runtime",
-    "bin",
-    "node"
-  ).fsPath;
+  const platform = process.platform;
 
-  const cliEntryPath = vscode.Uri.joinPath(
-    context.extensionUri,
-    LENS_CLOUD_ENTRY
-  ).fsPath;
-
-  const config = vscode.workspace.getConfiguration();
-  const rules = config.get<any[]>("chordium-auto.rules") || [];
-
-  if (!vscode.workspace.workspaceFolders?.length) {
-    output.appendLine("No workspace folder open.");
-    return;
+  let NODE20 = "";
+  if (platform === "win32") {
+    NODE20 = context.asAbsolutePath("node-runtime/node.exe");
+  } else if (platform === "darwin") {
+    NODE20 = context.asAbsolutePath("node-runtime/node-macos");
+  } else {
+    NODE20 = context.asAbsolutePath("node-runtime/node");
   }
 
-  const workspaceRoot = vscode.workspace.workspaceFolders[0].uri.fsPath;
-
-  const onSaveHandler = vscode.workspace.onDidSaveTextDocument(async (document) => {
-    const filePath = document.uri.fsPath;
-
-    for (const rule of rules) {
-      if (!rule.enabled) continue;
-      if (!Array.isArray(rule.events) || !rule.events.includes("onSave")) continue;
-
-      const watchFolders: string[] = Array.isArray(rule.watchFolders)
-        ? rule.watchFolders
-        : [];
-
-      if (!isInsideWatchedFolder(filePath, workspaceRoot, watchFolders)) continue;
-
-      const key = `${rule.command}::${watchFolders.join(",")}`;
-      if (debounceTimers.has(key)) clearTimeout(debounceTimers.get(key)!);
-
-      debounceTimers.set(
-        key,
-        setTimeout(() => {
-          debounceTimers.delete(key);
-          runRuleFlow(rule, workspaceRoot, node20Path, cliEntryPath, output);
-        }, 250)
-      );
-    }
-  });
-
-  context.subscriptions.push(onSaveHandler);
-  context.subscriptions.push(output);
-}
-
-/**
- * FULL RULE FLOW
- */
-async function runRuleFlow(
-  rule: any,
-  workspaceRoot: string,
-  node20: string,
-  cliEntry: string,
-  output: vscode.OutputChannel
-) {
-  const defaultBranch = "main";
-
-  const first = await vscode.window.showInformationMessage(
-    `Do you want Reference from ${defaultBranch}?`,
-    "Yes",
-    "No"
+  // Check if Node runtime exists
+  vscode.workspace.fs.stat(vscode.Uri.file(NODE20)).then(
+    () => {},
+    () => vscode.window.showErrorMessage(`Node 20 binary missing: ${NODE20}`)
   );
 
-  if (!first) {
-    output.appendLine("User dismissed main-branch popup.");
-    return;
+
+  // -------------------------------------------------------------------
+  // 2️⃣ Auto-detect lenscloud CLI with fallback
+  // -------------------------------------------------------------------
+
+  const FALLBACK_PATH =
+    "/home/tyro23007/.nvm/versions/node/v20.19.5/bin/lenscloud";
+
+  function detectLensCloud(): string | null {
+    try {
+      const resolved = which.sync("lenscloud");
+      console.log("Detected lenscloud at:", resolved);
+      return resolved;
+    } catch (err) {
+      // ========= Try fallback =========
+      try {
+        vscode.workspace.fs.stat(vscode.Uri.file(FALLBACK_PATH));
+        vscode.window.showWarningMessage(
+          `⚠️ lenscloud not found in PATH. Using fallback: ${FALLBACK_PATH}`
+        );
+        return FALLBACK_PATH;
+      } catch {
+        vscode.window.showErrorMessage(
+          "❌ lenscloud CLI not found. Install `npm i -g lenscloud` OR ensure fallback path exists."
+        );
+        return null;
+      }
+    }
   }
 
-  let selectedBranch = defaultBranch;
+  const LENS_CLOUD = detectLensCloud();
+  if (!LENS_CLOUD) return;
 
-  if (first === "No") {
-    const pick = await vscode.window.showQuickPick(BRANCHES, {
-      placeHolder: "Select base branch for analysis",
+
+  // -------------------------------------------------------------------
+  // 3️⃣ Output Channel
+  // -------------------------------------------------------------------
+
+  const output = vscode.window.createOutputChannel("Chordium Support");
+  output.show(true);
+
+
+  // -------------------------------------------------------------------
+  // 4️⃣ Run lenscloud using Node 20 with LIVE LOGS
+  // -------------------------------------------------------------------
+
+  function execLensCloud(args: string) {
+    // Split args properly
+    const splitArgs = args.split(" "); // e.g., "attach reference -b release" => ["attach","reference","-b","release"]
+  
+    // Use Node 20 to run the lenscloud JS file directly
+    const proc = cp.spawn(NODE20, [LENS_CLOUD!, ...splitArgs], {
+      cwd: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+      shell: false, // keep false for direct execution
     });
-    if (!pick) {
-      output.appendLine("User cancelled branch selection.");
+  
+    output.appendLine(`\n⚙️ Running (LIVE): ${NODE20} ${LENS_CLOUD} ${splitArgs.join(" ")}\n`);
+  
+    proc.stdout.on("data", (data) => {
+      output.appendLine(data.toString());
+    });
+  
+    proc.stderr.on("data", (data) => {
+      output.appendLine(`🟥 ${data.toString()}`);
+    });
+  
+    proc.on("close", (code) => {
+      output.appendLine(`\n✔️ Finished (exit code: ${code})\n`);
+      if (code !== 0) {
+        vscode.window.showErrorMessage(`LensCloud failed (exit code ${code})`);
+      }
+    });
+  
+    proc.on("error", (err) => {
+      output.appendLine(`❌ Spawn error: ${err.message}`);
+      vscode.window.showErrorMessage(`Spawn Error: ${err.message}`);
+    });
+  }
+  
+
+  // -------------------------------------------------------------------
+  // 5️⃣ Load User Configuration
+  // -------------------------------------------------------------------
+
+  const config = vscode.workspace.getConfiguration("chordiumSupport");
+  const settings = config.get<any[]>("commands") || [];
+
+
+  // -------------------------------------------------------------------
+  // 6️⃣ Branch Selection Popup
+  // -------------------------------------------------------------------
+
+  async function handleReferenceFlow(branches: string[], baseCmd: string) {
+    const defaultBranch = branches[0] ?? "main";
+
+    const action = await vscode.window.showInformationMessage(
+      `Do you want reference from ${defaultBranch}?`,
+      defaultBranch,
+      "Yes",
+      "No"
+    );
+
+    if (!action || action === "No") {
+      vscode.window.showWarningMessage("Skipped.");
       return;
     }
-    selectedBranch = pick;
+
+    let selectedBranch = defaultBranch;
+
+    if (action === defaultBranch) {
+      selectedBranch =
+        (await vscode.window.showQuickPick(branches, {
+          placeHolder: "Select branch",
+        })) ?? defaultBranch;
+    }
+
+    const finalConfirm = await vscode.window.showInformationMessage(
+      `Attach reference from ${selectedBranch}?`,
+      "Confirm",
+      "Cancel"
+    );
+
+    if (finalConfirm !== "Confirm") return;
+
+    execLensCloud(`${baseCmd} -b ${selectedBranch}`);
   }
 
-  vscode.window.showInformationMessage(
-    `Running analysis for branch: ${selectedBranch}`
-  );
 
-  output.appendLine(`Running analyser with branch ${selectedBranch}`);
+  // -------------------------------------------------------------------
+  // 7️⃣ Register Triggers From Settings
+  // -------------------------------------------------------------------
 
-  const analyseArgs = [...ANALYSE_ARGS, selectedBranch];
-
-  // <<<< NEW — spawn Node v20 + local CLI index.js
-  const analyser = spawn(LENS_CLOUD_PATH, analyseArgs, { shell: false });
-
-  let analyserStdout = "";
-  let analyserStderr = "";
-
-  analyser.stdout?.on("data", (chunk) => {
-    const s = chunk.toString();
-    analyserStdout += s;
-    output.appendLine(s.trimEnd());
-  });
-
-  analyser.stderr?.on("data", (chunk) => {
-    const s = chunk.toString();
-    analyserStderr += s;
-    output.appendLine(`STDERR: ${s.trimEnd()}`);
-  });
-
-  const analyserExit = await new Promise<number>((resolve) => {
-    analyser.on("close", (code) => resolve(code ?? -1));
-    analyser.on("error", () => resolve(-1));
-  });
-
-  if (analyserExit !== 0) {
-    vscode.window.showErrorMessage("LensCloud analyse failed.");
-    output.appendLine(`Analyser failed with code ${analyserExit}`);
-    return;
+  function isInScope(doc: vscode.TextDocument, folders: string[]) {
+    if (!folders || folders.length === 0) return true;
+    return folders.some((f) => doc.uri.fsPath.includes(f));
   }
 
-  const storyRefs = extractStoryReferences(analyserStdout);
-  if (!storyRefs.length) {
-    vscode.window.showInformationMessage("No story references found.");
-    output.appendLine("Found 0 story references.");
-    return;
-  }
+  settings.forEach((setting) => {
+    const { command, trigger, folders = [], branches = [] } = setting;
 
-  const attachChoice = await vscode.window.showInformationMessage(
-    `Found ${storyRefs.length}: ${storyRefs.join(", ")}. Attach?`,
-    "Attach",
-    "Skip"
-  );
+    if (trigger === "onSave") {
+      vscode.workspace.onDidSaveTextDocument((doc) => {
+        if (!isInScope(doc, folders)) return;
+        handleReferenceFlow(branches, command);
+      });
+    }
 
-  if (attachChoice !== "Attach") {
-    output.appendLine("User skipped attachment.");
-    return;
-  }
-
-  const attachArgs = [...ATTACH_ARGS, selectedBranch];
-
-  output.appendLine(`Running attach for branch ${selectedBranch}`);
-
-const attachChild: ChildProcess = spawn(LENS_CLOUD_PATH, attachArgs, { shell: false });
-
-
-  let attachStdout = "";
-  let attachStderr = "";
-
-  const PROMPT_REGEX = /\? Do you want to update the Task Reference Table\? \(Y\/n\)/i;
-  let promptSeen = false;
-
-  attachChild.stdout?.on("data", (chunk) => {
-    const s = chunk.toString();
-    attachStdout += s;
-    output.appendLine(s.trimEnd());
-
-    if (!promptSeen && PROMPT_REGEX.test(s)) {
-      promptSeen = true;
-      attachChild.stdin?.write("Y\n");
-      output.appendLine("[Auto] Sent Y to CLI");
+    if (trigger === "onChange") {
+      vscode.workspace.onDidChangeTextDocument((event) => {
+        if (!isInScope(event.document, folders)) return;
+        handleReferenceFlow(branches, command);
+      });
     }
   });
-
-  attachChild.stderr?.on("data", (chunk) => {
-    const s = chunk.toString();
-    attachStderr += s;
-    output.appendLine(`STDERR: ${s.trimEnd()}`);
-  });
-
-  const attachExit = await new Promise<number>((resolve) => {
-    attachChild.on("close", (code) => resolve(code ?? -1));
-    attachChild.on("error", () => resolve(-1));
-  });
-
-  if (attachExit === 0) {
-    vscode.window.showInformationMessage("Story reference attached successfully.");
-    output.appendLine("✔ Attach completed successfully.");
-  } else {
-    vscode.window.showErrorMessage("Failed to attach story references.");
-    output.appendLine(`❌ Attach exited with code ${attachExit}`);
-  }
-}
-
-/** Check folder match */
-function isInsideWatchedFolder(
-  filePath: string,
-  workspaceRoot: string,
-  watchFolders: string[]
-): boolean {
-  if (!watchFolders?.length) return false;
-
-  const absFile = path.resolve(filePath);
-
-  return watchFolders.some((folder) => {
-    const absFolder = path.resolve(workspaceRoot, folder);
-    return (
-      absFile === absFolder ||
-      absFile.startsWith(absFolder + path.sep)
-    );
-  });
-}
-
-/** Extract story refs like US-2025-0675 */
-function extractStoryReferences(text: string): string[] {
-  if (!text) return [];
-  const matches = text.match(/US-\d{4}-\d{4}/gi);
-  if (!matches) return [];
-  return [...new Set(matches.map((m) => m.toUpperCase()))];
 }
 
 export function deactivate() {}
-
